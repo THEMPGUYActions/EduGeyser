@@ -85,7 +85,6 @@ jobs:
               core/src/main/java/org/geysermc/geyser/configuration/ConfigMigrations.java \
               core/src/main/java/org/geysermc/geyser/configuration/GeyserConfig.java \
               core/src/main/java/org/geysermc/geyser/network/CIDRMatcher.java \
-              core/src/main/java/org/geysermc/geyser/text/AsteriskSerializer.java \
               core/src/main/java/org/geysermc/geyser/util/LoginEncryptionUtils.java \
               core/src/test/java/org/geysermc/geyser/configuration/ConfigLoaderTest.java
 
