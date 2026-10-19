@@ -395,6 +395,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             throw new UnsupportedOperationException("This hosting/service provider does not support applications running on the UDP port");
         }
         boolean portPropertyApplied = false;
+        boolean udpPortPropertyApplied = false;
         String pluginUdpAddress = System.getProperty("geyserUdpAddress", System.getProperty("pluginUdpAddress", ""));
 
         if (platformType() != PlatformType.STANDALONE) {
@@ -428,6 +429,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
                         logger.info("Port set from system property to match Java server.");
                     }
                     portPropertyApplied = true;
+                    udpPortPropertyApplied = true;
                 }
             }
 
@@ -448,6 +450,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
                 } else {
                     logger.info("Port set from system property: " + port);
                 }
+                udpPortPropertyApplied = true;
             }
 
 
@@ -465,24 +468,57 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             }
         }
 
-        // Now that the Bedrock port may have been changed, also check the broadcast port (configurable on all platforms)
-        String broadcastPort = System.getProperty("geyserBroadcastPort", "");
-        if (!broadcastPort.isEmpty()) {
+        String transportProperty = System.getProperty("geyserTransport", "");
+        if (!transportProperty.isEmpty()) {
             try {
-                int parsedPort = Integer.parseInt(broadcastPort);
-                if (parsedPort < 1 || parsedPort > 65535) {
-                    throw new NumberFormatException("The broadcast port must be between 1 and 65535 inclusive!");
-                }
-                config.advanced().bedrock().broadcastPort(parsedPort);
-                logger.info("Broadcast port set from system property: " + parsedPort);
-            } catch (NumberFormatException e) {
-                logger.error(String.format("Invalid broadcast port from system property: %s! Defaulting to configured port.", broadcastPort + " (" + e.getMessage() + ")"));
+                GeyserConfig.BedrockConfig.Transport transport = GeyserConfig.BedrockConfig.Transport.valueOf(transportProperty.toUpperCase(Locale.ROOT));
+                config.bedrock().transport(transport);
+                logger.info("Transport set from system property: " + transport.name().toLowerCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                logger.error("Invalid transport from system property: " + transportProperty + "! Use \"nethernet\", \"both\" or \"raknet\". Defaulting to configured transport.");
             }
         }
 
-        // It's set to 0 only if no system property or manual config value was set
+        String signalingModeProperty = System.getProperty("geyserSignalingMode", "");
+        if (!signalingModeProperty.isEmpty()) {
+            try {
+                GeyserConfig.SignalingConfig.Mode mode = GeyserConfig.SignalingConfig.Mode.valueOf(signalingModeProperty.toUpperCase(Locale.ROOT));
+                config.bedrock().signaling().mode(mode);
+                logger.info("Signaling mode set from system property: " + mode.name().toLowerCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                logger.error("Invalid signaling mode from system property: " + signalingModeProperty + "! Use \"builtin\", \"hybrid\" or \"nxs\". Defaulting to configured signaling mode.");
+            }
+        }
+
+        // The explicit WebRTC port property always wins. Without it, and with only NetherNet, WebRTC is the only
+        // UDP service, so it follows the UDP port property; with "both", RakNet keeps that port.
+        int webrtcPort = portProperty("geyserWebrtcPort", "NetherNet (WebRTC)", logger);
+        if (webrtcPort != 0) {
+            config.bedrock().webrtcPort(webrtcPort);
+            logger.info("NetherNet (WebRTC) port set from system property: " + webrtcPort);
+        } else if (udpPortPropertyApplied && config.bedrock().transport() == GeyserConfig.BedrockConfig.Transport.NETHERNET) {
+            config.bedrock().webrtcPort(0);
+            logger.info("NetherNet (WebRTC) port set from the Bedrock port system property: " + config.bedrock().port());
+        }
+
+        // Now that the Bedrock port may have been changed, also check the broadcast port (configurable on all platforms)
+        int broadcastPort = portProperty("geyserBroadcastPort", "Broadcast", logger);
+        if (broadcastPort != 0) {
+            config.advanced().bedrock().broadcastPort(broadcastPort);
+            logger.info("Broadcast port set from system property: " + broadcastPort);
+        }
+        config.bedrock().raknetPort(portProperty("geyserRaknetPort", "RakNet", logger));
+        config.bedrock().signaling().port(portProperty("geyserSignalingPort", "Built-in signaling", logger));
+
+        // These are 0 only if no system property or manual config value was set
         if (config.advanced().bedrock().broadcastPort() == 0) {
             config.advanced().bedrock().broadcastPort(config.bedrock().port());
+        }
+        if (config.bedrock().raknetPort() == 0) {
+            config.bedrock().raknetPort(config.bedrock().port());
+        }
+        if (config.bedrock().signaling().port() == 0) {
+            config.bedrock().signaling().port(config.bedrock().port());
         }
 
         if (!(config instanceof GeyserPluginConfig)) {
@@ -509,10 +545,25 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             logger.debug("Epoll is not available; Erosion's Unix socket handling will not work.");
         }
 
-        int bedrockThreadCount = Integer.getInteger("Geyser.BedrockNetworkThreads", -1);
-        if (bedrockThreadCount == -1) {
-            // Copy the code from Netty's default thread count fallback
-            bedrockThreadCount = Math.max(1, SystemPropertyUtil.getInt("io.netty.eventLoopThreads", NettyRuntime.availableProcessors() * 2));
+        // RakNet takes the UDP side of the Bedrock port; NetherNet signaling its TCP side, and WebRTC
+        // the UDP side too if RakNet is not running
+        GeyserConfig.BedrockConfig.Transport transport = config.bedrock().transport();
+        this.geyserServer = null;
+        this.netherNetServer = null;
+        if (transport.raknet()) {
+            startRaknet(config, logger);
+        }
+        if (transport.nethernet()) {
+            this.netherNetServer = new NetherNetServer(this);
+            this.netherNetServer.start();
+        } else {
+            logger.error("      / \\");
+            logger.error("     /   \\      WARNING! NetherNet support is NOT enabled.");
+            logger.error("    /  |  \\     Players will not be able to connect to your server,");
+            logger.error("   /   |   \\    starting October 27th, when NetherNet is scheduled to release.");
+            logger.error("  /         \\   Please see our blog post over at https://geysermc.org/blog/preparing-for-nethernet");
+            logger.error(" /     o     \\  on how to enable NetherNet support.");
+            logger.error("/_____________\\");
         }
 
         this.geyserServer = new RaknetServer(this, bedrockThreadCount);
@@ -781,7 +832,6 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
     public void reloadGeyser() {
         isReloading = true;
         this.eventBus.fire(new GeyserPreReloadEvent(this.extensionManager, this.eventBus));
-
         bootstrap.onGeyserDisable();
         bootstrap.onGeyserEnable();
 
@@ -1011,6 +1061,28 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             metrics.addCustomChart(new SimplePie("version", () -> GeyserImpl.VERSION));
             metrics.addCustomChart(new SimplePie("javaHaProxyProtocol", () -> String.valueOf(config.advanced().java().useHaproxyProtocol())));
             metrics.addCustomChart(new SimplePie("bedrockHaProxyProtocol", () -> String.valueOf(config.advanced().bedrock().useHaproxyProtocol())));
+            metrics.addCustomChart(new SimplePie("bedrockTransport", () -> config.bedrock().transport().toString().toLowerCase(Locale.ROOT)));
+            metrics.addCustomChart(new DrilldownPie("signalingMode", () -> {
+                // Signaling is only used with NetherNet; an empty map skips this chart
+                if (!config.bedrock().transport().nethernet()) {
+                    return Map.of();
+                }
+
+                // builtin => (https, 1)
+                // nxs => (nxs, 1)
+                GeyserConfig.SignalingConfig signaling = config.bedrock().signaling();
+                String builtinType;
+                if (!signaling.mode().builtin()) {
+                    builtinType = "nxs";
+                } else if (!signaling.builtin().https().certificate().isBlank()) {
+                    builtinType = "https";
+                } else if (!config.advanced().bedrock().signalingTrustedProxies().isEmpty()) {
+                    builtinType = "http (reverse proxy)";
+                } else {
+                    builtinType = "http";
+                }
+                return Map.of(signaling.mode().toString().toLowerCase(Locale.ROOT), Map.of(builtinType, 1));
+            }));
             metrics.addCustomChart(new AdvancedPie("playerPlatform", () -> {
                 Map<String, Integer> valueMap = new HashMap<>();
                 for (GeyserSession session : sessionManager.getAllSessions()) {

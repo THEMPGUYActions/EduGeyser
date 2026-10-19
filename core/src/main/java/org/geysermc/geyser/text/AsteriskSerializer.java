@@ -104,13 +104,19 @@ public class AsteriskSerializer implements JsonSerializer<String> {
         try {
             node.set("***");
         } catch (SerializationException e) {
-            throw new RuntimeException("Unable to censor IP address", e); // Error over silently printing an IP address.
+            throw new RuntimeException("Unable to censor a secret", e); // Error over silently printing a secret.
         }
     }
 
     @Target({ElementType.FIELD, ElementType.METHOD})
     @Retention(RetentionPolicy.RUNTIME)
     public @interface Asterisk {
+
+    }
+
+    @Target({ElementType.FIELD, ElementType.METHOD})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Secret {
 
     }
 }

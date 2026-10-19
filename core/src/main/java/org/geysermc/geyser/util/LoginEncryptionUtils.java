@@ -185,6 +185,13 @@ public class LoginEncryptionUtils {
                     session.disconnect("Did not receive IP and xuid forwarded from the proxy!");
                     return;
                 }
+                // The proxy authenticated this player, so there is no key of theirs to compare.
+                // Spending the binding is what stops the admission expiring under a live session,
+                // and it only happens once the forwarded fields above have been accepted.
+                if (refusedByBinding(geyser, session, TransportIdentityBinding.acceptForwardedIdentity(
+                        session.getUpstream().getSession().getPeer().getChannel()))) {
+                    return;
+                }
             }
 
             String displayName = extraData.displayName;
@@ -247,6 +254,21 @@ public class LoginEncryptionUtils {
             SecretKey encryptionKey = EncryptionUtils.getSecretKey(serverKeyPair.getPrivate(), key, token);
             session.getUpstream().getSession().enableEncryption(encryptionKey);
         }
+    }
+
+    /**
+     * Disconnects the session when the transport identity binding turned the login away.
+     *
+     * @param refusal why the binding refused it, or null when it did not
+     * @return whether the login was refused, and the session already disconnected
+     */
+    private static boolean refusedByBinding(GeyserImpl geyser, GeyserSession session, String refusal) {
+        if (refusal == null) {
+            return false;
+        }
+        geyser.getLogger().info("Refused a login from " + session.getSocketAddress() + ", " + refusal);
+        session.disconnect(GeyserLocale.getLocaleStringLog("geyser.network.remote.invalid_xbox_account"));
+        return true;
     }
 
     private static void sendEncryptionFailedMessage(GeyserImpl geyser) {
