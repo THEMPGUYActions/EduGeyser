@@ -9,6 +9,8 @@ on:
       - master
     paths:
       - ".github/workflows/upstream-sync.yml"
+      - ".github/workflows/pull-request.yml"
+      - ".github/workflows/build-remote.yml"
 
 permissions:
   contents: read
