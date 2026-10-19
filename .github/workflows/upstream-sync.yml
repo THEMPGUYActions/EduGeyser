@@ -143,6 +143,7 @@ jobs:
           - Keeps EduGeyser's Education NetherNet stack instead of mixing it with Geyser's incompatible built-in transport implementation.
           - Retries merge conflicts with rename detection disabled if necessary.
           - Runs the EduGeyser Gradle build on JDK 27.
+          - Should be merged with a merge commit (not squash/rebase) to preserve upstream ancestry for future incremental syncs.
 
           The workflow never pushes to master or auto-merges this PR. If its merge result contains no actual tree changes, no empty PR is opened.
           EOF
