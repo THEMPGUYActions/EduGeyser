@@ -119,7 +119,7 @@ jobs:
         run: git push --force origin HEAD:refs/heads/automation/upstream-sync
 
       - name: Open sync pull request if needed
-        if: steps.result.outputs.updated == 'true'
+        if: github.repository == 'EduGeyser/EduGeyser' && steps.result.outputs.updated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -146,7 +146,7 @@ jobs:
           fi
 
       - name: Close stale sync PR when already up to date
-        if: steps.result.outputs.updated != 'true'
+        if: github.repository == 'EduGeyser/EduGeyser' && steps.result.outputs.updated != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
