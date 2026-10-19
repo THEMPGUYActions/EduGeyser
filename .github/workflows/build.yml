@@ -6,10 +6,12 @@ on:
     branches-ignore:
       - 'gh-readonly-queue/**'
     paths-ignore:
+      - '.github/workflows/build.yml'
       - '.github/ISSUE_TEMPLATE/*.yml'
       - '.github/workflows/build-remote.yml'
       - '.github/workflows/preview.yml'
       - '.github/workflows/pull-request.yml'
+      - '.github/workflows/sync-geyser-upstream.yml'
       - '.idea/copyright/*.xml'
       - '.gitignore'
       - 'CONTRIBUTING.md'
@@ -43,7 +45,7 @@ jobs:
           
       - name: Archive Artifacts
         uses: GeyserMC/actions/upload-multi-artifact@master
-        if: success()
+        if: ${{ success() && github.repository == 'GeyserMC/Geyser' }}
         with:
           artifacts: |
             bootstrap/mod/fabric/build/libs/Geyser-Fabric.jar

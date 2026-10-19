@@ -1,0 +1,193 @@
+name: Sync Geyser upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/sync-geyser-upstream.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geyser-upstream-sync-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      updated: ${{ steps.result.outputs.updated }}
+      preserved: ${{ steps.nethernet.outputs.preserved }}
+    steps:
+      - name: Check out EduGeyser
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fetch Geyser upstream
+        run: |
+          git remote add geysermc https://github.com/GeyserMC/Geyser.git
+          git fetch --no-tags geysermc master
+
+      - name: Merge upstream changes
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B automation/geyser-upstream-sync origin/master
+          baseline="$(git rev-parse HEAD)"
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+
+          if ! git merge --no-edit -X ours -m "Merge latest GeyserMC/Geyser master" geysermc/master; then
+            git merge --abort || true
+            echo "::notice::Retrying with rename detection disabled."
+            if ! git merge --no-edit -X ours -X no-renames -m "Merge latest GeyserMC/Geyser master" geysermc/master; then
+              echo "::error title=Unable to merge Geyser upstream::Unresolved paths are listed below."
+              git diff --name-only --diff-filter=U || true
+              exit 1
+            fi
+          fi
+
+      - name: Preserve EduGeyser's Education NetherNet implementation
+        id: nethernet
+        env:
+          BASELINE: ${{ steps.merge.outputs.baseline }}
+        run: |
+          # Geyser's new transport uses a different API from EduGeyser's working
+          # Education Edition transport, which handles education joins and join codes.
+          if [ -d core/src/main/java/org/geysermc/geyser/network/bedrock/nethernet ]; then
+            echo "preserved=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Keeping EduGeyser's implementation and excluding Geyser's incompatible NetherNet transport."
+
+            git restore --source="$BASELINE" --staged --worktree -- \
+              core/src/main/java/org/geysermc/geyser/Constants.java \
+              core/src/main/java/org/geysermc/geyser/GeyserImpl.java \
+              core/src/main/java/org/geysermc/geyser/command/CommandRegistry.java \
+              core/src/main/java/org/geysermc/geyser/configuration/ConfigMigrations.java \
+              core/src/main/java/org/geysermc/geyser/configuration/GeyserConfig.java \
+              core/src/main/java/org/geysermc/geyser/network/CIDRMatcher.java \
+              core/src/main/java/org/geysermc/geyser/util/LoginEncryptionUtils.java \
+              core/src/test/java/org/geysermc/geyser/configuration/ConfigLoaderTest.java
+
+            # Remove Geyser-added paths only when EduGeyser did not already own them.
+            # If EduGeyser has its own file at one of these paths, restore that version.
+            for path in \
+              core/src/main/java/org/geysermc/geyser/network/bedrock/nethernet \
+              core/src/main/java/org/geysermc/geyser/command/defaults/NetherNetCommand.java \
+              core/src/test/java/org/geysermc/geyser/network/bedrock/nethernet \
+              core/src/test/java/org/geysermc/geyser/dump/DumpSecretsTest.java \
+              core/src/test/java/org/geysermc/geyser/util/LoginIdentityBindingTest.java; do
+              if git cat-file -e "$BASELINE:$path" 2>/dev/null; then
+                git restore --source="$BASELINE" --staged --worktree -- "$path"
+              else
+                git rm -r --ignore-unmatch -- "$path"
+              fi
+            done
+
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit -m "Preserve EduGeyser's Education NetherNet implementation"
+            fi
+          else
+            echo "preserved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Keep independent upstream secret-censoring fix
+        run: |
+          # This change is independent of Geyser's built-in NetherNet transport.
+          # Take the full upstream implementation so -X ours cannot silently omit
+          # its processor while keeping Education-specific networking untouched.
+          git checkout geysermc/master -- core/src/main/java/org/geysermc/geyser/text/AsteriskSerializer.java
+          git add core/src/main/java/org/geysermc/geyser/text/AsteriskSerializer.java
+          if ! git diff --cached --quiet; then
+            git commit -m "Apply upstream secret-censoring improvements"
+          fi
+
+      - name: Detect actual tree changes
+        id: result
+        env:
+          BASELINE: ${{ steps.merge.outputs.baseline }}
+        run: |
+          if git diff --quiet "$BASELINE" HEAD; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push generated sync branch
+        if: steps.result.outputs.updated == 'true' || steps.nethernet.outputs.preserved == 'true'
+        run: git push --force origin HEAD:refs/heads/automation/geyser-upstream-sync
+
+      - name: Open or refresh PR against EduGeyser
+        if: steps.result.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Sync latest GeyserMC upstream"
+          body="$(cat <<'EOF'
+          This PR was generated by EduGeyser's upstream-sync workflow.
+
+          - Merges the latest GeyserMC/Geyser master.
+          - Keeps EduGeyser's existing Education NetherNet transport for education connections and join codes instead of mixing in Geyser's incompatible implementation.
+          - Preserves EduGeyser's changes at textual conflicts and retries with rename detection disabled if needed.
+          - Runs the EduGeyser Gradle build with JDK 27.
+          - Should be merged with a merge commit (not squash/rebase) to preserve upstream ancestry for future incremental syncs.
+
+          This workflow never pushes to master or auto-merges. Unresolved conflicts stop the workflow instead of creating a broken PR.
+          EOF
+          )"
+          pr_number="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$GITHUB_REPOSITORY_OWNER:automation/geyser-upstream-sync" --base master --json number --jq '.[0].number // empty')"
+          if [ -n "$pr_number" ]; then
+            echo "Existing upstream sync PR #$pr_number will update when the branch is pushed."
+          elif gh pr create --repo "$GITHUB_REPOSITORY" --base master --head automation/geyser-upstream-sync --title "$title" --body "$body"; then
+            echo "Created upstream sync PR."
+          else
+            echo "::warning::Cannot create PR with GITHUB_TOKEN. Enable 'Allow GitHub Actions to create and approve pull requests' in repository Actions settings."
+          fi
+
+      - name: Close stale sync PR when already up to date
+        if: github.repository == 'EduGeyser/EduGeyser' && steps.result.outputs.updated != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$GITHUB_REPOSITORY_OWNER:automation/geyser-upstream-sync" --base master --json number --jq '.[0].number // empty')"
+          if [ -n "$pr_number" ]; then
+            gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" --comment "EduGeyser already contains the current Geyser updates that can be applied without replacing its Education NetherNet implementation."
+          fi
+
+  validate:
+    needs: sync
+    if: needs.sync.outputs.updated == 'true' || needs.sync.outputs.preserved == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out generated sync branch
+        uses: actions/checkout@v4
+        with:
+          ref: automation/geyser-upstream-sync
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up JDK 27
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "27"
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build EduGeyser
+        run: ./gradlew build
