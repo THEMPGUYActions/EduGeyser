@@ -40,12 +40,15 @@ jobs:
           git fetch --no-tags geysermc master
 
       - name: Start from the current fork master
-        run: git checkout -B automation/upstream-sync origin/master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B automation/upstream-sync origin/master
 
       - name: Merge latest EduGeyser commits
         run: |
           if ! git merge --no-edit -X ours edugeyser/master; then
-            echo "::error title=EduGeyser upstream merge failed::Manual conflict resolution is required."
+            echo "::error title=EduGeyser upstream merge failed::Inspect the merge output and unresolved paths below."
             git diff --name-only --diff-filter=U || true
             exit 1
           fi
@@ -53,7 +56,7 @@ jobs:
       - name: Merge latest Geyser commits
         run: |
           if ! git merge --no-edit --no-ff -X ours -m "Merge latest GeyserMC/Geyser master" geysermc/master; then
-            echo "::error title=Geyser upstream merge failed::Manual conflict resolution is required."
+            echo "::error title=Geyser upstream merge failed::Inspect the merge output and unresolved paths below."
             git diff --name-only --diff-filter=U || true
             exit 1
           fi
