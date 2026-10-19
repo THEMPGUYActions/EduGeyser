@@ -56,9 +56,13 @@ jobs:
       - name: Merge latest Geyser commits
         run: |
           if ! git merge --no-edit --no-ff -X ours -m "Merge latest GeyserMC/Geyser master" geysermc/master; then
-            echo "::error title=Geyser upstream merge failed::Inspect the merge output and unresolved paths below."
-            git diff --name-only --diff-filter=U || true
-            exit 1
+            git merge --abort || true
+            echo "::notice::Retrying the Geyser merge with rename detection disabled to avoid false rename conflicts."
+            if ! git merge --no-edit --no-ff -X ours -X no-renames -m "Merge latest GeyserMC/Geyser master" geysermc/master; then
+              echo "::error title=Geyser upstream merge failed::Inspect the merge output and unresolved paths below."
+              git diff --name-only --diff-filter=U || true
+              exit 1
+            fi
           fi
 
       - name: Check whether upstream changed
@@ -85,7 +89,7 @@ jobs:
 
           - Merges the latest `EduGeyser/EduGeyser:master`.
           - Merges the latest `GeyserMC/Geyser:master`.
-          - Uses Git's `-X ours` strategy, preserving this fork's version at conflicting hunks while accepting non-conflicting upstream changes.
+          - Uses Git's `-X ours` strategy, preserving this fork's version at conflicting hunks while accepting non-conflicting upstream changes. If rename-aware merging fails, it retries with rename detection disabled to avoid false rename pairs during the networking refactor.
           - Runs the EduGeyser-required Gradle build on JDK 27.
 
           The workflow does not push to `master` or auto-merge this PR. Review the diff and passing CI before merging. If Git cannot resolve a conflict, the workflow fails and reports the remaining paths instead of pushing an unresolved branch.
