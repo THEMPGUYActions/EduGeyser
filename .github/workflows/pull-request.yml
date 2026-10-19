@@ -15,6 +15,7 @@ jobs:
   preview:
     needs: [build]
     if: >-
+      github.repository == 'GeyserMC/Geyser' &&
       contains(github.event.pull_request.labels.*.name, 'PR: Needs Testing')
     # Allow access to secrets if we are uploading a preview
     secrets: inherit
