@@ -27,6 +27,7 @@ jobs:
       pull-requests: write
     outputs:
       updated: ${{ steps.result.outputs.updated }}
+      preserved: ${{ steps.nethernet.outputs.preserved }}
     steps:
       - name: Check out fork
         uses: actions/checkout@v4
@@ -67,12 +68,14 @@ jobs:
           fi
 
       - name: Preserve EduGeyser's Education NetherNet implementation
+        id: nethernet
         env:
           BASELINE: ${{ steps.merge.outputs.baseline }}
         run: |
           # Geyser's built-in NetherNet implementation uses a different transport API
           # than EduGeyser's Education Edition join-code implementation. Do not mix them.
           if [ -d core/src/main/java/org/geysermc/geyser/network/bedrock/nethernet ]; then
+            echo "preserved=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Found Geyser's separate NetherNet implementation; retaining EduGeyser's existing transport stack."
 
             git restore --source="$BASELINE" --staged --worktree -- \
@@ -97,6 +100,8 @@ jobs:
             if ! git diff --cached --quiet; then
               git commit -m "Preserve EduGeyser's Education NetherNet implementation"
             fi
+          else
+            echo "preserved=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Detect actual tree changes
@@ -111,7 +116,7 @@ jobs:
           fi
 
       - name: Push generated sync branch
-        if: steps.result.outputs.updated == 'true'
+        if: steps.result.outputs.updated == 'true' || steps.nethernet.outputs.preserved == 'true'
         run: git push --force origin HEAD:refs/heads/automation/upstream-sync
 
       - name: Open sync pull request if needed
@@ -153,7 +158,7 @@ jobs:
 
   validate:
     needs: sync
-    if: needs.sync.outputs.updated == 'true'
+    if: needs.sync.outputs.updated == 'true' || needs.sync.outputs.preserved == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
