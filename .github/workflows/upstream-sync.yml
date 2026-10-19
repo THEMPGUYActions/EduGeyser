@@ -88,12 +88,20 @@ jobs:
               core/src/main/java/org/geysermc/geyser/util/LoginEncryptionUtils.java \
               core/src/test/java/org/geysermc/geyser/configuration/ConfigLoaderTest.java
 
-            git rm -r --ignore-unmatch -- \
+            # Remove Geyser-added paths only when EduGeyser did not already own them.
+            # If EduGeyser has its own file at one of these paths, restore that version.
+            for path in \
               core/src/main/java/org/geysermc/geyser/network/bedrock/nethernet \
               core/src/main/java/org/geysermc/geyser/command/defaults/NetherNetCommand.java \
               core/src/test/java/org/geysermc/geyser/network/bedrock/nethernet \
               core/src/test/java/org/geysermc/geyser/dump/DumpSecretsTest.java \
-              core/src/test/java/org/geysermc/geyser/util/LoginIdentityBindingTest.java
+              core/src/test/java/org/geysermc/geyser/util/LoginIdentityBindingTest.java; do
+              if git cat-file -e "$BASELINE:$path" 2>/dev/null; then
+                git restore --source="$BASELINE" --staged --worktree -- "$path"
+              else
+                git rm -r --ignore-unmatch -- "$path"
+              fi
+            done
 
             git add -A
             if ! git diff --cached --quiet; then
