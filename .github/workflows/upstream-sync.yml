@@ -103,6 +103,17 @@ jobs:
             echo "preserved=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Keep independent upstream secret-censoring fix
+        run: |
+          # This change is independent of Geyser's built-in NetherNet transport.
+          # Take the full upstream implementation so -X ours cannot silently omit
+          # its processor while keeping Education-specific networking untouched.
+          git checkout geysermc/master -- core/src/main/java/org/geysermc/geyser/text/AsteriskSerializer.java
+          git add core/src/main/java/org/geysermc/geyser/text/AsteriskSerializer.java
+          if ! git diff --cached --quiet; then
+            git commit -m "Apply upstream secret-censoring improvements"
+          fi
+
       - name: Detect actual tree changes
         id: result
         env:
