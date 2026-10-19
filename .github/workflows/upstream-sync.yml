@@ -78,7 +78,7 @@ jobs:
         if: steps.result.outputs.updated == 'true'
         run: git push --force origin HEAD:refs/heads/automation/upstream-sync
 
-      - name: Open or update sync pull request
+      - name: Open sync pull request if needed
         if: steps.result.outputs.updated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -92,14 +92,16 @@ jobs:
           - Uses Git's `-X ours` strategy, preserving this fork's version at conflicting hunks while accepting non-conflicting upstream changes. If rename-aware merging fails, it retries with rename detection disabled to avoid false rename pairs during the networking refactor.
           - Runs the EduGeyser-required Gradle build on JDK 27.
 
-          The workflow does not push to `master` or auto-merge this PR. Review the diff and passing CI before merging. If Git cannot resolve a conflict, the workflow fails and reports the remaining paths instead of pushing an unresolved branch.
+          The workflow does not push to `master` or auto-merge this PR. Review the diff and passing CI before merging.
           EOF
           )"
           pr_number="$(gh pr list --state open --head automation/upstream-sync --base master --json number --jq '.[0].number // empty')"
           if [ -n "$pr_number" ]; then
-            gh pr edit "$pr_number" --title "$title" --body "$body"
+            echo "Existing sync PR #$pr_number will update automatically when this branch is pushed."
+          elif gh pr create --base master --head automation/upstream-sync --title "$title" --body "$body"; then
+            echo "Created sync PR."
           else
-            gh pr create --base master --head automation/upstream-sync --title "$title" --body "$body"
+            echo "::warning::GitHub Actions is not allowed to create pull requests in this repository. The branch has been pushed and validated; open https://github.com/THEMPGUYActions/EduGeyser/compare/master...automation/upstream-sync manually or enable Actions pull-request creation in repository settings."
           fi
 
       - name: Close stale sync PR when already up to date
@@ -109,7 +111,9 @@ jobs:
         run: |
           pr_number="$(gh pr list --state open --head automation/upstream-sync --base master --json number --jq '.[0].number // empty')"
           if [ -n "$pr_number" ]; then
-            gh pr close "$pr_number" --comment "The latest upstream commits are already present in master, so this generated sync PR is no longer needed."
+            if ! gh pr close "$pr_number" --comment "The latest upstream commits are already present in master, so this generated sync PR is no longer needed."; then
+              echo "::warning::Unable to close the stale sync PR with GITHUB_TOKEN; check repository Actions permissions."
+            fi
           fi
 
   validate:
