@@ -10,6 +10,7 @@ on:
       - '.github/workflows/build-remote.yml'
       - '.github/workflows/build.yml'
       - '.github/workflows/upstream-sync.yml'
+      - '.github/workflows/sync-geyser-upstream.yml'
       - '.github/workflows/preview.yml'
       - '.github/workflows/pull-request.yml'
       - '.idea/copyright/*.xml'
