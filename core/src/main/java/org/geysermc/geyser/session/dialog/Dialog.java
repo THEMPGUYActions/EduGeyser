@@ -28,6 +28,7 @@ package org.geysermc.geyser.session.dialog;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtType;
@@ -43,7 +44,6 @@ import org.geysermc.geyser.registry.java.reader.JavaRegistryReader;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.dialog.input.DialogInput;
 import org.geysermc.geyser.session.dialog.input.ParsedInputs;
-import org.geysermc.geyser.text.MinecraftLocale;
 import org.geysermc.geyser.translator.text.MessageTranslator;
 import org.geysermc.geyser.util.MinecraftKey;
 import org.geysermc.mcprotocollib.protocol.data.game.Holder;
@@ -59,14 +59,14 @@ public abstract class Dialog {
     private static final Key PLAIN_MESSAGE_BODY = MinecraftKey.key("plain_message");
 
     @Getter
-    private final String title;
+    private final Component title;
     @Getter
-    private final Optional<String> externalTitle;
+    private final Optional<Component> externalTitle;
     @Getter
     private final boolean canCloseWithEscape;
     @Getter
     private final AfterAction afterAction;
-    private final List<String> labels;
+    private final List<Component> labels;
     private final List<DialogInput<?>> inputs = new ArrayList<>();
     @Getter
     private final ParsedInputs defaultInputs;
@@ -115,22 +115,20 @@ public abstract class Dialog {
     protected FormBuilder<? extends FormBuilder<?,?,?>, ? extends Form, ? extends FormResponse> createForm(DialogHolder holder, Optional<ParsedInputs> restored) {
         if (inputs.isEmpty()) {
             SimpleForm.Builder builder = SimpleForm.builder()
-                .translator(MinecraftLocale::getLocaleString, holder.session().locale())
-                .title(title);
-            builder.content(String.join("\n\n", labels));
+                .title(holder.convertText(title));
+            builder.content(labels.stream().map(holder::convertText).collect(Collectors.joining("\n\n")));
 
             builder.closedOrInvalidResultHandler(() -> holder.closeDialog(onCancel()));
             addCustomComponents(holder, builder);
             return builder;
         } else {
             CustomForm.Builder builder = CustomForm.builder()
-                .translator(MinecraftLocale::getLocaleString, holder.session().locale())
-                .title(title);
-            for (String label : labels) {
-                builder.label(label);
+                .title(holder.convertText(title));
+            for (Component label : labels) {
+                builder.label(holder.convertText(label));
             }
 
-            restored.ifPresentOrElse(last -> last.restore(holder, builder), () -> inputs.forEach(input -> input.addComponent(builder)));
+            restored.ifPresentOrElse(last -> last.restore(holder, builder), () -> inputs.forEach(input -> input.addComponent(builder, holder)));
             builder.closedOrInvalidResultHandler(response -> holder.closeDialog(onCancel()));
             addCustomComponents(holder, builder);
             return builder;

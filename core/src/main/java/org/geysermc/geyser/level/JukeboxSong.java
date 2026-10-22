@@ -25,11 +25,12 @@
 
 package org.geysermc.geyser.level;
 
+import net.kyori.adventure.text.Component;
 import org.cloudburstmc.nbt.NbtMap;
 import org.geysermc.geyser.registry.java.reader.JavaRegistryReader;
 import org.geysermc.geyser.util.SoundUtils;
 
-public record JukeboxSong(String soundEvent, String description) {
+public record JukeboxSong(String soundEvent, Component description) {
 
     public static JukeboxSong read(JavaRegistryReader.Context context) {
         NbtMap data = context.dataAsMap();

@@ -25,6 +25,7 @@
 
 package org.geysermc.geyser.item.enchantment;
 
+import net.kyori.adventure.text.Component;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.cloudburstmc.nbt.NbtMap;
 import org.geysermc.geyser.inventory.item.BedrockEnchantment;
@@ -45,7 +46,7 @@ import java.util.Set;
 public record Enchantment(Set<EnchantmentComponent> effects,
                           GeyserHolderSet<Item> supportedItems,
                           int maxLevel,
-                          String description,
+                          @Nullable Component description,
                           int anvilCost,
                           GeyserHolderSet<Enchantment> exclusiveSet,
                           @Nullable BedrockEnchantment bedrockEnchantment) {
@@ -68,6 +69,7 @@ public record Enchantment(Set<EnchantmentComponent> effects,
 
         String description = bedrockEnchantment == null ? context.deserializeDescription() : null;
 
+        Component description = bedrockEnchantment == null ? context.parseDescription() : null;
         return new Enchantment(effects, supportedItems, maxLevel, description, anvilCost, exclusiveSet, bedrockEnchantment);
     }
 

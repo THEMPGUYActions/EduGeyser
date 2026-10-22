@@ -33,7 +33,6 @@ import org.geysermc.geyser.registry.java.JavaRegistryProvider;
 import org.geysermc.geyser.util.MinecraftKey;
 
 import java.util.List;
-import java.util.Optional;
 
 public class MultiActionDialog extends DialogWithButtons {
 

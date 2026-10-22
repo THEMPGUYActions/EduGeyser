@@ -367,7 +367,7 @@ public class DataComponentHashers {
         return hash(registries, component.getType(), component.getValue());
     }
 
-    public static HashedStack hashStack(GeyserSession session, ItemStack stack) {
+    public static HashedStack hashStack(JavaRegistryProvider registries, ItemStack stack) {
         if (stack == null) {
             return null;
         }

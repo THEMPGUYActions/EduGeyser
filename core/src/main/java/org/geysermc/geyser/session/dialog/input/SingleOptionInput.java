@@ -26,6 +26,7 @@
 package org.geysermc.geyser.session.dialog.input;
 
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
 import org.cloudburstmc.nbt.NbtType;
@@ -63,7 +64,7 @@ public class SingleOptionInput extends DialogInput<String> {
     }
 
     @Override
-    public void addComponent(CustomForm.Builder builder, Optional<String> restored) {
+    public void addComponent(CustomForm.Builder builder, TextTranslator textTranslator, Optional<String> restored) {
         int defaultOption = initial;
         if (restored.isPresent()) {
             for (int i = 0; i < entries.size(); i++) {
@@ -73,7 +74,7 @@ public class SingleOptionInput extends DialogInput<String> {
                 }
             }
         }
-        builder.dropdown(labelVisible ? label : "", entries.stream().map(Entry::label).toList(), defaultOption);
+        builder.dropdown(labelVisible ? label(textTranslator) : "", entries.stream().map(entry -> entry.label(textTranslator)).toList(), defaultOption);
     }
 
     @Override
@@ -96,10 +97,12 @@ public class SingleOptionInput extends DialogInput<String> {
         return entries.get(initial).id();
     }
 
-    private record Entry(String id, Optional<String> fancyLabel) {
+    private record Entry(String id, Optional<Component> fancyLabel) {
 
-        public String label() {
-            return fancyLabel.orElse(id);
+        public String label(TextTranslator textTranslator) {
+            return fancyLabel
+                .map(textTranslator::convertText)
+                .orElse(id);
         }
     }
 }

@@ -26,11 +26,12 @@
 package org.geysermc.geyser.session.dialog.input;
 
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
 import org.geysermc.cumulus.form.CustomForm;
 import org.geysermc.cumulus.response.CustomFormResponse;
-import org.geysermc.geyser.session.GeyserSession;
+import org.geysermc.geyser.translator.text.TextTranslator;
 import org.geysermc.geyser.translator.text.MessageTranslator;
 import org.geysermc.geyser.util.MinecraftKey;
 
@@ -38,18 +39,18 @@ import java.util.Optional;
 
 public abstract class DialogInput<T> {
     protected final String key;
-    protected final String label;
+    protected final Component label;
 
     protected DialogInput(String locale, NbtMap map) {
         this.key = map.getString("key");
         this.label = MessageTranslator.convertLenientNbtMessage(map.get("label"), locale);
     }
 
-    public void addComponent(CustomForm.Builder builder) {
-        addComponent(builder, Optional.empty());
+    public void addComponent(CustomForm.Builder builder, TextTranslator textTranslator) {
+        addComponent(builder, textTranslator, Optional.empty());
     }
 
-    public abstract void addComponent(CustomForm.Builder builder, Optional<T> restored);
+    public abstract void addComponent(CustomForm.Builder builder, TextTranslator textTranslator, Optional<T> restored);
 
     public abstract T read(CustomFormResponse response) throws DialogInputParseException;
 

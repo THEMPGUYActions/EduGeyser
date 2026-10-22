@@ -25,6 +25,7 @@
 
 package org.geysermc.geyser.session.dialog;
 
+import net.kyori.adventure.text.Component;
 import org.cloudburstmc.nbt.NbtMap;
 import org.geysermc.geyser.registry.java.JavaRegistryProvider;
 import org.geysermc.geyser.session.dialog.action.DialogAction;
@@ -34,7 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public record DialogButton(String label, Optional<DialogAction> action) {
+public record DialogButton(Component label, Optional<DialogAction> action) {
 
     public static List<DialogButton> readList(JavaRegistryProvider registries, String locale, List<NbtMap> tag) {
         if (tag == null) {

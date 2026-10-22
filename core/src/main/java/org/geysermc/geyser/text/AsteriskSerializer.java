@@ -40,7 +40,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Type;
+import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 
 public class AsteriskSerializer implements JsonSerializer<String> {
     public static final String[] NON_SENSITIVE_ADDRESSES = {"", "0.0.0.0", "localhost", "127.0.0.1", "auto", "unknown"};
@@ -69,10 +71,8 @@ public class AsteriskSerializer implements JsonSerializer<String> {
                 return false;
             }
         } catch (Exception e) {
-            // Ignore
+            return true;
         }
-
-        return true;
     }
 
     /**
@@ -104,13 +104,19 @@ public class AsteriskSerializer implements JsonSerializer<String> {
         try {
             node.set("***");
         } catch (SerializationException e) {
-            throw new RuntimeException("Unable to censor IP address", e); // Error over silently printing an IP address.
+            throw new RuntimeException("Unable to censor a secret", e); // Error over silently printing a secret.
         }
     }
 
     @Target({ElementType.FIELD, ElementType.METHOD})
     @Retention(RetentionPolicy.RUNTIME)
     public @interface Asterisk {
+
+    }
+
+    @Target({ElementType.FIELD, ElementType.METHOD})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Secret {
 
     }
 }

@@ -38,11 +38,11 @@ import org.geysermc.mcprotocollib.protocol.data.game.item.component.DataComponen
 import java.util.List;
 
 public class ComponentCache implements ResolvableComponentGetter {
-    private final GeyserSession session;
+    private final JavaRegistryProvider registries;
     private final Reference2ObjectMap<Item, DataComponents> resolvedComponents = new Reference2ObjectOpenHashMap<>();
 
-    public ComponentCache(GeyserSession session) {
-        this.session = session;
+    public ComponentCache(JavaRegistryProvider registries) {
+        this.registries = registries;
     }
 
     @Override

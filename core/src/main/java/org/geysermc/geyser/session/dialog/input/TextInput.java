@@ -50,8 +50,8 @@ public class TextInput extends DialogInput<String> {
     }
 
     @Override
-    public void addComponent(CustomForm.Builder builder, Optional<String> restored) {
-        builder.input(labelVisible ? label : "", "", restored.orElse(initial));
+    public void addComponent(CustomForm.Builder builder, TextTranslator textTranslator, Optional<String> restored) {
+        builder.input(labelVisible ? label(textTranslator) : "", "", restored.orElse(initial));
     }
 
     @Override
