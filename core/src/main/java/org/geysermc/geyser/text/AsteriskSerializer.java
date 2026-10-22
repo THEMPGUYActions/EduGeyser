@@ -29,6 +29,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import io.netty.util.NetUtil;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.ConfigurationOptions;
 import org.spongepowered.configurate.interfaces.InterfaceDefaultOptions;
@@ -66,21 +67,34 @@ public class AsteriskSerializer implements JsonSerializer<String> {
         }
 
         try {
-            InetAddress address = InetAddress.getByName(ip);
-            if (address.isAnyLocalAddress() || address.isSiteLocalAddress() || address.isLoopbackAddress()) {
-                return false;
-            }
+            return isSensitiveIp(InetAddress.getByName(ip));
         } catch (Exception e) {
             return true;
         }
     }
 
+    private static boolean isSensitiveIp(InetAddress address) {
+        return !address.isAnyLocalAddress() && !address.isSiteLocalAddress() && !address.isLoopbackAddress();
+    }
+
     /**
-     * Options for writing a config into a dump, censoring its {@link Asterisk} values.
+     * An address and port for a dump, the address censored the same way as an {@link Asterisk} value.
+     */
+    public static String censor(InetSocketAddress endpoint) {
+        InetAddress address = endpoint.getAddress();
+        if (address != null && (showSensitive || !isSensitiveIp(address))) {
+            return NetUtil.toSocketAddressString(endpoint);
+        }
+        return (address instanceof Inet6Address ? "[***]:" : "***:") + endpoint.getPort();
+    }
+
+    /**
+     * Options for writing a config into a dump, censoring its {@link Asterisk} and {@link Secret} values.
      */
     public static ConfigurationOptions dumpOptions() {
         return InterfaceDefaultOptions.addTo(ConfigurationOptions.defaults(), builder ->
-                builder.addProcessor(Asterisk.class, CONFIGURATE_SERIALIZER))
+                builder.addProcessor(Asterisk.class, CONFIGURATE_SERIALIZER)
+                    .addProcessor(Secret.class, String.class, CONFIGURATE_SECRET))
             .shouldCopyDefaults(false);
     }
 
@@ -104,9 +118,27 @@ public class AsteriskSerializer implements JsonSerializer<String> {
         try {
             node.set("***");
         } catch (SerializationException e) {
-            throw new RuntimeException("Unable to censor a secret", e); // Error over silently printing a secret.
+            throw new RuntimeException("Unable to censor IP address", e); // Error over silently printing an IP address.
         }
     }
+
+    /**
+     * Censors a value that is never safe to publish, such as a token or a password.
+     * <p>
+     * Unlike {@link Asterisk} this ignores {@code showSensitive}, so a full dump censors it too: a
+     * dump is routinely posted to a public paste, and a reader helping with support has no use for
+     * the secret itself. An empty value is left alone so that "not configured" stays visible.
+     */
+    private static final Processor.Factory<Secret, String> CONFIGURATE_SECRET = (data, fieldType) -> (value, destination) -> {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
+        try {
+            destination.set("***");
+        } catch (SerializationException e) {
+            throw new RuntimeException("Unable to censor a secret", e); // Error over silently printing a secret.
+        }
+    };
 
     @Target({ElementType.FIELD, ElementType.METHOD})
     @Retention(RetentionPolicy.RUNTIME)
